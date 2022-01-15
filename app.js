@@ -1,6 +1,3 @@
-/* eslint-disable no-unused-vars */
-/* eslint-disable new-cap */
-/* eslint-disable max-len */
 require(`dotenv`).config();
 const {createAudioResource, createAudioPlayer, joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus} = require(`@discordjs/voice`);
 const {Client, Intents} = require(`discord.js`);
