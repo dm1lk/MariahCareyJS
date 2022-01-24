@@ -1,5 +1,5 @@
 # ☃️ MariahCareyJS
-This is a quickly threw together, festive-themed discord bot that brings a little Christmas spriit to a voice channel near you!
+This is a quickly threw together, festive-themed discord bot that brings a little Christmas spirit to a voice channel near you!
 
 # ℹ️ Usage
 ```
