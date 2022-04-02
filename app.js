@@ -1,10 +1,14 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable new-cap */
+/* eslint-disable max-len */
 require(`dotenv`).config();
 const {createAudioResource, createAudioPlayer, joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus} = require(`@discordjs/voice`);
-const {Client, Intents} = require(`discord.js`);
+const {Client, Intents, Collection} = require(`discord.js`);
 const client = new Client({
   intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_VOICE_STATES],
 });
 const songPath = `./song.ogg`;
+client.players = new Collection();
 client.once(`ready`, async () => {
   // Uncomment Code to Deploy.
 /*   const {
@@ -26,6 +30,16 @@ client.once(`ready`, async () => {
   ).then( console.log(`[PROCESS] Registered (/) commands globally.`)); */
   client.user.setActivity('Mariah Carey - All I Want for Christmas Is You', {type: 'LISTENING'});
   console.log(`[PROCESS] Mariah Carey is ready.`);
+});
+
+client.on(`voiceStateUpdate`, async (oldState, newState) => {
+  const connection = await getVoiceConnection(newState.guild.id);
+  if (!connection) return;
+  if (!newState.channelId === connection.joinConfig.channelId) return;
+  const voiceChannel = await oldState.guild.channels.cache.get(connection.joinConfig.channelId);
+  const audioPlayer = client.players.get(connection.joinConfig.guildId);
+  if (voiceChannel.members.size === 1) audioPlayer.pause();
+  else if (voiceChannel.members.size > 1) audioPlayer.unpause();
 });
 
 client.on(`interactionCreate`, async (interaction) => {
@@ -61,32 +75,44 @@ client.on(`interactionCreate`, async (interaction) => {
           console.log(`[GUILD/${interaction.guild.id}] Cannot resume connection to VC "${member.voice.channel.name}", stopping player!`);
           console.log(`[GUILD/${interaction.guild.id}] Stopped playing (connection lost) in VC "${member.voice.channel.name}"!`);
           connection.destroy();
+          client.players.get(interaction.guild.id).stop();
+          client.players.set(interaction.guild.id, null);
         }
       });
       const audioPlayer = createAudioPlayer();
       connection.subscribe(audioPlayer) && audioPlayer.play(createAudioResource(songPath));
+      client.players.set(interaction.guild.id, audioPlayer);
       interaction.reply({embeds: [{description: `✅ Started Playing in ${member.voice.channel.name}!`, color: `00FF00 `}], ephemeral: true});
       console.log(`[GUILD/${interaction.guild.id}] Started playing in VC "${member.voice.channel.name}!"`);
+      connection.on('stateChange', (oldState, newState) => {
+        console.log(`[GUILD/${interaction.guild.id}] Connection transitioned from ${oldState.status} to ${newState.status}`);
+      });
+      audioPlayer.on('stateChange', (oldState, newState) => {
+        console.log(`[GUILD/${interaction.guild.id}] Audio player transitioned from ${oldState.status} to ${newState.status}`);
+      });
       if (loop) {
         audioPlayer.on('stateChange', (oldState, newState) => {
           if (newState.status == `idle`) {
             audioPlayer.play(createAudioResource(songPath));
           }
         });
-        connection.on(VoiceConnectionStatus.Disconnected, async () => {
+/*         connection.on(VoiceConnectionStatus.Disconnected, async () => {
+          console.log(`[GUILD/${interaction.guild.id}] Loop mode was enabled, establishing a new connection to VC "${member.voice.channel.name}"!`);
           try {
-            connection = await joinVoiceChannel({
-              channelId: member.voice.channel.id,
-              guildId: interaction.guild.id,
-              adapterCreator: interaction.guild.voiceAdapterCreator,
-            });
             connection.subscribe(audioPlayer);
+            client.players.set(interaction.guild.id, audioPlayer);
+            console.log(`[GUILD/${interaction.guild.id}] Connected to VC "${member.voice.channel.name}"!`);
+            console.log(`[GUILD/${interaction.guild.id}] Started playing in VC "${member.voice.channel.name}!"`);
           } catch (error) {
+            client.players.set(interaction.guild.id, null);
+            console.log(`[GUILD/${interaction.guild.id}] Cannot establish a new connection to VC "${member.voice.channel.name}", giving up.`);
             console.log(`[PROCESS] ${error}`);
           }
-        });
+        }); */
       }
     } catch (error) {
+      client.players.get(interaction.guild.id).stop();
+      client.players.set(interaction.guild.id, null);
       interaction.reply({embeds: [{description: `🛑 An internal error occured! [${error}]`, color: `ff0000 `}], ephemeral: true});
     };
   } else if (interaction.commandName == `stop`) {
@@ -95,6 +121,8 @@ client.on(`interactionCreate`, async (interaction) => {
     if (connection) {
       if (member.voice.channel.id == connection.joinConfig.channelId) {
         connection.destroy();
+        client.players.get(interaction.guild.id).stop();
+        client.players.set(interaction.guild.id, null);
         interaction.reply({embeds: [{description: `✅ Stopped Playing in ${member.voice.channel.name}!`, color: `00FF00 `}], ephemeral: true});
         console.log(`[GUILD/${interaction.guild.id}] Stopped playing (requested) in VC "${member.voice.channel.name}"!`);
       } else {
